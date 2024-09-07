@@ -7,8 +7,17 @@ import java.util.List;
  */
 public class Node {
 
+    private Node parent;
     private List<Long> keys;
     private List<Node> children;
+
+    public Node getParent() {
+        return parent;
+    }
+
+    public void setParent(Node parent) {
+        this.parent = parent;
+    }
 
     public List<Long> getKeys() {
         return keys;

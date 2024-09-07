@@ -22,10 +22,20 @@ public class BPlusTree {
     // root node
     private Node root;
 
-    public BPlusTree(int m) {
-        this.M = m;
-        this.kUpperBound = m - 1;
-        this.kLowerBound = (int) (Math.ceil((double) m / 2) - 1);
+    public BPlusTree(int M) {
+        if (M < 3) {
+            throw new RuntimeException("M is at least 3.");
+        }
+
+        this.M = M;
+        this.kUpperBound = M - 1;
+        this.kLowerBound = (int) (Math.ceil((double) M / 2) - 1);
+
+        System.out.println("----------.----------.----------.----------.----------.----------.----------");
+        System.out.printf("initialize a B+ tree which is an %s-way search tree\n", M);
+        System.out.printf("number of children (of every inner node other than the root): [%s, %s]\n", kLowerBound + 1, kUpperBound + 1);
+        System.out.printf("number of keys (of every node other than the root): [%s, %s]\n", kLowerBound, kUpperBound);
+        System.out.println("----------.----------.----------.----------.----------.----------.----------");
     }
 
     // whether this node is overflow
@@ -44,22 +54,14 @@ public class BPlusTree {
             return null;
         }
 
-        Node parent = null;
         Node node = root;
 
         while (true) {
             List<Long> keys = node.getKeys();
-            int childPointer = keys.size() - 1 + 1;
-
-            for (int i = 0; i < keys.size(); i++) {
-                if (k < keys.get(i)) {
-                    childPointer = i;
-                    break;
-                }
-            }
+            int childPointer = intervalIndex(keys, k);
 
             if (node instanceof LeafNode) {
-                SearchResult searchResult = new SearchResult(false, parent, (LeafNode) node, childPointer);
+                SearchResult searchResult = new SearchResult(false, (LeafNode) node, childPointer);
                 if (childPointer == 0) {
                     return searchResult;
                 } else if (k != keys.get(childPointer - 1)) {
@@ -70,71 +72,118 @@ public class BPlusTree {
                 }
             }
 
-            parent = node;
             node = node.getChildren().get(childPointer);
         }
     }
 
+    // determine the index of k in the intervals of keys
+    private int intervalIndex(List<Long> keys, long k) {
+        int intervalIndex = keys.size() - 1 + 1;
+
+        for (int i = 0; i < keys.size(); i++) {
+            if (k < keys.get(i)) {
+                intervalIndex = i;
+                break;
+            }
+        }
+
+        return intervalIndex;
+    }
+
     // insert a key
     public boolean insert(long k) {
+        System.out.printf("[INSERT] k: %s\n", k);
         if (null == root) {
             root = new LeafNode();
-            root.setKeys(new ArrayList<Long>(){{
+            root.setKeys(new ArrayList<Long>() {{
                 add(k);
             }});
 
+            System.out.printf("[INSERTED] leaf: %s\n", root.getKeys().toString());
+            System.out.println("[DONE]");
             return true;
         }
 
         SearchResult searchResult = search(k);
         if (searchResult.isFound()) {
+            System.out.println("[REFUSED]");
             return false;
         }
-        Node parent = searchResult.getParent();
         LeafNode leaf = searchResult.getLeaf();
         int index = searchResult.getIntervalIndex();
         // insert
         leaf.getKeys().add(index, k);
+        System.out.printf("[INSERTED] leaf: %s\n", leaf.getKeys().toString());
 
-        if (overflow(leaf)) {
-            // split
-            split(parent, leaf);
-            // todo perfect
-        }
+        // split and rebalance when the leaf is overflow
+        splitAndRebalanceWhenOverflow(leaf);
 
+        System.out.println("[DONE]");
         return true;
     }
 
-    private void split(Node parent, Node node) {
-        // todo perfect
-        List<Long> keys = node.getKeys();
+    // split and rebalance when the node is overflow
+    private void splitAndRebalanceWhenOverflow(Node node) {
+        if (!overflow(node)) {
+            return;
+        }
+        System.out.printf("[OVERFLOW] node: %s\n", node.getKeys().toString());
 
+        Node rightNode;
         if (node instanceof LeafNode) {
-            LeafNode rightNode = new LeafNode();
+            rightNode = new LeafNode();
 
-            int medianIndex = keys.size() / 2 + 1 - 1;
-            Long median = keys.get(medianIndex);
-            List<Long> keys1 = keys.subList(0, medianIndex);
-            List<Long> keys2 = keys.subList(medianIndex, keys.size());
-
-            node.setKeys(keys1);
-            rightNode.setKeys(keys2);
             ((LeafNode) node).setRight(rightNode);
-            rightNode.setLeft(node);
-
-            if (null == parent) {
-                parent = new Node();
-                parent.setKeys(new ArrayList<Long>(){{add(median);}});
-                parent.setChildren(new ArrayList<Node>(){{add(node);add(rightNode);}});
-
-                root = parent;
-            } else {
-
-            }
+            ((LeafNode) rightNode).setLeft(node);
         } else {
-
+            rightNode = new Node();
         }
 
+        int medianIndex = node.getKeys().size() / 2 + 1 - 1;
+        Long median = node.getKeys().get(medianIndex);
+        List<Long> keys1 = new ArrayList<>(node.getKeys().subList(0, medianIndex));
+        List<Long> keys2 = new ArrayList<>(node.getKeys().subList((node instanceof LeafNode) ? medianIndex : (medianIndex + 1), node.getKeys().size()));
+        System.out.printf("[SPLIT] left keys: %s\n", keys1);
+        System.out.printf("[SPLIT] right keys: %s\n", keys2);
+
+        node.setKeys(keys1);
+        rightNode.setKeys(keys2);
+
+        if (!(node instanceof LeafNode)) {
+            List<Node> children1 = new ArrayList<>(node.getChildren().subList(0, medianIndex + 1));
+            List<Node> children2 = new ArrayList<>(node.getChildren().subList(medianIndex + 1, node.getChildren().size()));
+
+            node.setChildren(children1);
+            rightNode.setChildren(children2);
+        }
+
+        Node parent = node.getParent();
+        if (null == parent) {
+            parent = new Node();
+            parent.setKeys(new ArrayList<Long>() {{
+                add(median);
+            }});
+            parent.setChildren(new ArrayList<Node>() {{
+                add(node);
+                add(rightNode);
+            }});
+
+            node.setParent(parent);
+            rightNode.setParent(parent);
+
+            root = parent;
+            System.out.printf("[NEW-ROOT] root: %s\n", root.getKeys().toString());
+        } else {
+            int index = intervalIndex(parent.getKeys(), median);
+            parent.getKeys().add(index, median);
+            parent.getChildren().add(index + 1, rightNode);
+
+            rightNode.setParent(parent);
+            System.out.printf("[INSERTED-MEDIAN-INTO-PARENT] parent: %s\n", parent.getKeys().toString());
+
+            // split and rebalance when the parent is overflow
+            splitAndRebalanceWhenOverflow(parent);
+        }
     }
 
 }

@@ -8,14 +8,12 @@ class BPlusTreeTest {
 
     @Test
     void insert() {
-        BPlusTree tree = new BPlusTree(10);
+        BPlusTree tree = new BPlusTree(3);
 
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 10; i++) {
             long k = new Random().nextInt(10);
-            boolean result = tree.insert(k);
-            System.out.printf("insert %s\t: %s\n", k, result);
+            tree.insert(k);
+            System.out.println();
         }
-
-        System.out.println("DONE");
     }
 }

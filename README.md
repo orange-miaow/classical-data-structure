@@ -1,6 +1,6 @@
 Classical Data Structure
 ---
 
-| Categories  | Subcategories |
-|-------------|---------------|
-| search tree | B+Tree        |
+| Categories  | Subcategories | Completed functions              |
+|-------------|---------------|----------------------------------|
+| search tree | B+Tree        | search, insert(split, rebalance) |
